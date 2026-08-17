@@ -21,10 +21,47 @@ See [the product specification](docs/product-spec.md) and
 
 ## Current status
 
-This repository contains only the project foundation: a small FastAPI service,
-a health endpoint, tests, linting, container configuration, and initial design
-documentation. Book processing, AI integrations, persistence, caching, image
-generation, and a user interface are intentionally not implemented yet.
+The first thin vertical slice is implemented. The API accepts a UTF-8 TXT book,
+stores it in a process-local temporary workspace, detects probable chapter
+headings, and lets the client select an inclusive spoiler boundary. Text exposed
+for subsequent processing is restricted to the selected chapter and everything
+before it.
+
+The current slice deliberately has no database. Uploads and boundary selections
+are lost when the API process stops and are not shared across multiple workers.
+LLM integrations, semantic extraction, image generation, and a user interface
+are not implemented yet.
+
+## API workflow
+
+Upload a UTF-8 `.txt` file of up to 5 MB:
+
+```bash
+curl -F "book_file=@path/to/book.txt;type=text/plain" \
+  http://localhost:8000/books
+```
+
+The response contains a generated book ID, file metadata, and a numbered list of
+probable chapters. Chapter detection is deterministic and recognizes headings on
+their own line such as `Chapter 1`, `Chapter III: Return`, `Prologue`, and
+`Epilogue`. A book with no recognized headings is treated as one chapter.
+
+Select the last chapter that processing may access:
+
+```bash
+curl -X PUT -H "Content-Type: application/json" \
+  -d '{"chapter_number": 2}' \
+  http://localhost:8000/books/BOOK_ID/spoiler-boundary
+```
+
+Retrieve the spoiler-safe context that future processing stages will consume:
+
+```bash
+curl http://localhost:8000/books/BOOK_ID/context
+```
+
+The context endpoint returns `409 Conflict` until a boundary is selected. There
+is intentionally no API endpoint for retrieving the unrestricted full text.
 
 ## Local setup
 
@@ -54,7 +91,8 @@ Run the API:
 make run
 ```
 
-The health check is available at <http://localhost:8000/health>.
+The health check is available at <http://localhost:8000/health>. Interactive API
+documentation is available at <http://localhost:8000/docs>.
 
 Run the quality checks:
 

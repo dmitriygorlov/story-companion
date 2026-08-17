@@ -10,27 +10,33 @@
 
 ## Processing pipeline
 
-The planned pipeline is intentionally not implemented in the current foundation.
+The current thin slice implements the deterministic path through upload,
+normalization, chapter detection, and spoiler-boundary enforcement. Later
+model-backed stages remain planned.
 
 1. **Upload and validation**
-   - Accept a supported user-provided book format.
-   - Validate type, size, and extraction safety.
-   - Assign an internal book identifier without exposing the original file.
+   - Implemented for UTF-8 `.txt` files up to 5 MB.
+   - Reject invalid encodings, empty files, and other file extensions.
+   - Assign an opaque book identifier and save a normalized UTF-8 copy in a
+     process-local temporary workspace.
 
 2. **Text extraction and normalization**
-   - Extract text and structural markers such as chapters and sections.
-   - Normalize formatting while retaining offsets into the source.
-   - Record extraction warnings instead of silently dropping content.
+   - TXT decoding and UTF-8 normalization are implemented.
+   - A deterministic line-based detector recognizes probable `Chapter ...`,
+     `Prologue`, and `Epilogue` headings and retains character offsets.
+   - Rich document extraction and extraction warnings remain planned.
 
 3. **Segmentation and evidence indexing**
-   - Divide the book into addressable evidence spans.
-   - Attach chapter, section, and source-location metadata to every span.
-   - Build retrieval data without changing the text's reading order.
+   - Chapter-level segmentation is implemented.
+   - Fine-grained evidence spans, source-location metadata, and retrieval indexes
+     remain planned.
 
 4. **Spoiler-boundary resolution**
-   - Convert the reader's progress into an inclusive set of allowed spans.
-   - Reject ambiguous or invalid progress markers.
-   - Ensure all later stages can access only the allowed evidence set.
+   - Implemented as an inclusive detected-chapter number.
+   - Missing and out-of-range boundaries are rejected.
+   - The workspace reads only the UTF-8 byte prefix ending at the selected
+     chapter. This spoiler-safe context is the only text interface intended for
+     subsequent processing stages.
 
 5. **Entity and event extraction**
    - Extract character mentions, aliases, relationships, and events.
@@ -65,7 +71,21 @@ The planned pipeline is intentionally not implemented in the current foundation.
   illustration providers.
 
 The choice of database, task queue, model providers, and frontend is deferred.
-None of those components is included in the initial repository foundation.
+None of those components is included in the current slice.
+
+## Current runtime boundaries
+
+Book metadata and spoiler selections live in process memory, while uploaded text
+lives in an operating-system temporary directory owned by the API process. The
+temporary directory is cleaned up when the process exits under normal conditions.
+This design is suitable only for the first single-process slice: restarts lose
+state, multiple API workers do not share books, and there is no user isolation or
+durable deletion workflow yet.
+
+The chapter detector is a transparent heuristic, not a parser for every possible
+book layout. Its output is returned to the client for review before the spoiler
+boundary is selected. Future formats can add dedicated extraction adapters while
+keeping the same spoiler-scoped workspace interface.
 
 ## Core provenance model
 

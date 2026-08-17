@@ -219,6 +219,7 @@ __marimo__/
 
 # Story Companion local configuration
 /.codex/
+/docs/local/
 .env.*
 !.env.example
 
