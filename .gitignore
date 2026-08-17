@@ -216,3 +216,34 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Story Companion local configuration
+/.codex/
+.env.*
+!.env.example
+
+# User-provided books and generated artifacts
+uploads/
+data/uploads/
+generated/
+outputs/
+data/generated/
+
+# Local databases
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite3-journal
+
+# Local model caches
+.model-cache/
+model-cache/
+models/cache/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.suo
+*.swp
+*.swo
