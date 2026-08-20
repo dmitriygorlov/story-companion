@@ -28,8 +28,10 @@ model-backed stages remain planned.
 
 3. **Segmentation and evidence indexing**
    - Chapter-level segmentation is implemented.
-   - Fine-grained evidence spans, source-location metadata, and retrieval indexes
-     remain planned.
+   - A spoiler-safe processing context now carries allowed chapter text and
+     stable character offsets in the normalized source.
+   - Claim-level evidence schemas and deterministic provenance validation are
+     implemented; fine-grained retrieval indexes remain planned.
 
 4. **Spoiler-boundary resolution**
    - Implemented as an inclusive detected-chapter number.
@@ -39,6 +41,16 @@ model-backed stages remain planned.
      subsequent processing stages.
 
 5. **Entity and event extraction**
+   - Character, claim, epistemic-category, evidence, and extraction-result
+     schemas are defined.
+   - An async provider protocol and extraction service are implemented. The
+     provider receives only `SpoilerSafeBookContext`, and every result passes
+     deterministic evidence validation before it can leave the service.
+   - A fake provider covers the end-to-end contract in tests.
+   - An optional OpenAI Responses API adapter uses Pydantic structured output.
+     It defaults to `gpt-5.6-luna`, ships a versioned extraction prompt, caps
+     output tokens, uses no reasoning effort for the bounded extraction task,
+     and rejects oversized one-pass contexts before a paid call.
    - Extract character mentions, aliases, relationships, and events.
    - Require evidence-span identifiers for every proposed book fact.
    - Keep extraction results provisional until validation and reconciliation.
@@ -70,8 +82,8 @@ model-backed stages remain planned.
 - **Model adapters:** isolated interfaces for extraction, inference, and optional
   illustration providers.
 
-The choice of database, task queue, model providers, and frontend is deferred.
-None of those components is included in the current slice.
+The choice of database, task queue, and frontend is deferred. OpenAI is the first
+hosted extraction adapter, but the core service remains provider-neutral.
 
 ## Current runtime boundaries
 
@@ -87,15 +99,23 @@ book layout. Its output is returned to the client for review before the spoiler
 boundary is selected. Future formats can add dedicated extraction adapters while
 keeping the same spoiler-scoped workspace interface.
 
+For the current TXT adapter, front matter before the first detected heading is
+excluded from processing context. This prevents a table of contents from leaking
+future chapter titles through an early spoiler boundary. All evidence offsets are
+Python character offsets in the normalized UTF-8 text, not byte positions in the
+originally uploaded file.
+
 ## Core provenance model
 
-Future domain models should represent at least:
+The initial character extraction contract represents:
 
-- The claim or creative detail
+- The provisional character and aliases
+- Each individual claim or creative detail
 - Its classification: `book_fact`, `model_inference`, or `creative_choice`
-- Supporting evidence span identifiers, when applicable
-- The reader progress boundary used to produce it
-- The processing version and confidence or validation state
+- Exact supporting book, chapter, character offsets, and excerpt when applicable
+- The reader progress boundary and schema version used to produce the result
 
-This separation should be enforced in schemas and storage rather than expressed
-only through user-interface text or model prompts.
+Book facts and model inferences require evidence. Creative choices cannot present
+book evidence as if it directly supported the invented detail. A deterministic
+validator rejects evidence from another book, a later chapter, outside its
+chapter offsets, or with an excerpt that does not exactly match source text.

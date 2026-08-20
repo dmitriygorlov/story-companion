@@ -12,6 +12,14 @@ from story_companion.book_workspace import (
     BookWorkspace,
     SpoilerBoundaryNotSetError,
 )
+from story_companion.character_extraction import CharacterExtractionService
+from story_companion.extraction_schemas import CharacterExtractionResult, EvidenceValidationError
+from story_companion.model_provider import (
+    CharacterProvider,
+    CharacterProviderError,
+    CharacterProviderInputTooLargeError,
+)
+from story_companion.openai_provider import openai_provider_from_environment
 from story_companion.schemas import (
     BookMetadata,
     BookResponse,
@@ -30,7 +38,10 @@ class HealthResponse(BaseModel):
     status: Literal["ok"]
 
 
-def create_app(book_workspace: BookWorkspace | None = None) -> FastAPI:
+def create_app(
+    book_workspace: BookWorkspace | None = None,
+    character_provider: CharacterProvider | None = None,
+) -> FastAPI:
     """Create the API with an isolated temporary book workspace."""
 
     workspace = book_workspace or BookWorkspace()
@@ -143,6 +154,46 @@ def create_app(book_workspace: BookWorkspace | None = None) -> FastAPI:
             text=text,
         )
 
+    @application.post(
+        "/books/{book_id}/characters",
+        response_model=CharacterExtractionResult,
+        tags=["characters"],
+    )
+    async def extract_characters(book_id: str) -> CharacterExtractionResult:
+        """Extract evidence-grounded characters from spoiler-safe context."""
+
+        if character_provider is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="No character extraction provider is configured",
+            )
+
+        service = CharacterExtractionService(workspace, character_provider)
+        try:
+            return await service.extract(book_id)
+        except BookNotFoundError as error:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Book not found") from error
+        except SpoilerBoundaryNotSetError as error:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Select a spoiler boundary before extracting characters",
+            ) from error
+        except EvidenceValidationError as error:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Character provider returned invalid evidence: {error}",
+            ) from error
+        except CharacterProviderInputTooLargeError as error:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail=str(error),
+            ) from error
+        except CharacterProviderError as error:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Character provider request failed",
+            ) from error
+
     return application
 
 
@@ -177,4 +228,4 @@ def _book_response(record: BookRecord) -> BookResponse:
     )
 
 
-app = create_app()
+app = create_app(character_provider=openai_provider_from_environment())

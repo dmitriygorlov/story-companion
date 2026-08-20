@@ -1,12 +1,14 @@
 """Temporary local storage with spoiler-scoped text access."""
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import RLock
 from uuid import uuid4
 
 from story_companion.chapter_detection import DetectedChapter, detect_chapters
+from story_companion.processing_context import ChapterContext, SpoilerSafeBookContext
 
 
 class BookNotFoundError(KeyError):
@@ -17,7 +19,7 @@ class SpoilerBoundaryNotSetError(RuntimeError):
     """Raised when text is requested before a spoiler boundary is selected."""
 
 
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class BookRecord:
     """Public metadata and processing state for a temporarily stored book."""
 
@@ -51,6 +53,7 @@ class BookWorkspace:
         self._root = root
         self._root.mkdir(parents=True, exist_ok=True)
         self._books: dict[str, _StoredBook] = {}
+        self._lock = RLock()
 
     def create_book(self, filename: str, text: str, uploaded_size_bytes: int) -> BookRecord:
         """Persist one normalized UTF-8 book and return its metadata."""
@@ -75,34 +78,75 @@ class BookWorkspace:
             character_count=len(text),
             chapters=chapters,
         )
-        self._books[book_id] = _StoredBook(
-            record=record,
-            path=book_path,
-            chapter_end_bytes=chapter_end_bytes,
-        )
+        with self._lock:
+            self._books[book_id] = _StoredBook(
+                record=record,
+                path=book_path,
+                chapter_end_bytes=chapter_end_bytes,
+            )
         return record
 
     def get_book(self, book_id: str) -> BookRecord:
         """Return metadata without reading the stored book text."""
 
-        return self._get_stored_book(book_id).record
+        with self._lock:
+            return self._get_stored_book(book_id).record
 
     def set_spoiler_boundary(self, book_id: str, chapter_number: int) -> BookRecord:
         """Select the last chapter that downstream processing may access."""
 
-        record = self._get_stored_book(book_id).record
-        if chapter_number < 1 or chapter_number > len(record.chapters):
-            raise ValueError(f"chapter_number must be between 1 and {len(record.chapters)}")
-        record.spoiler_boundary = chapter_number
-        return record
+        with self._lock:
+            stored_book = self._get_stored_book(book_id)
+            record = stored_book.record
+            if chapter_number < 1 or chapter_number > len(record.chapters):
+                raise ValueError(f"chapter_number must be between 1 and {len(record.chapters)}")
+
+            updated_record = replace(record, spoiler_boundary=chapter_number)
+            self._books[book_id] = replace(stored_book, record=updated_record)
+            return updated_record
 
     def read_spoiler_safe_text(self, book_id: str) -> str:
-        """Read only bytes at or before the selected chapter boundary."""
+        """Read detected chapter text at or before the selected boundary."""
 
-        stored_book = self._get_stored_book(book_id)
+        with self._lock:
+            stored_book = self._get_stored_book(book_id)
+            allowed_text = self._read_allowed_text(stored_book)
+            first_chapter_offset = stored_book.record.chapters[0].start_offset
+            return allowed_text[first_chapter_offset:]
+
+    def build_processing_context(self, book_id: str) -> SpoilerSafeBookContext:
+        """Build chapter-scoped input without exposing unrestricted storage."""
+
+        with self._lock:
+            stored_book = self._get_stored_book(book_id)
+            record = stored_book.record
+            allowed_text = self._read_allowed_text(stored_book)
+            boundary = record.spoiler_boundary
+            if boundary is None:
+                raise SpoilerBoundaryNotSetError(book_id)
+
+            chapter_contexts = []
+            for chapter in record.chapters[:boundary]:
+                chapter_contexts.append(
+                    ChapterContext(
+                        number=chapter.number,
+                        title=chapter.title,
+                        start_offset=chapter.start_offset,
+                        end_offset=chapter.end_offset,
+                        text=allowed_text[chapter.start_offset : chapter.end_offset],
+                    )
+                )
+
+            return SpoilerSafeBookContext(
+                book_id=book_id,
+                through_chapter=boundary,
+                chapters=tuple(chapter_contexts),
+            )
+
+    def _read_allowed_text(self, stored_book: _StoredBook) -> str:
         record = stored_book.record
         if record.spoiler_boundary is None:
-            raise SpoilerBoundaryNotSetError(book_id)
+            raise SpoilerBoundaryNotSetError(record.book_id)
 
         allowed_bytes = stored_book.chapter_end_bytes[record.spoiler_boundary - 1]
         with stored_book.path.open("rb") as book_file:

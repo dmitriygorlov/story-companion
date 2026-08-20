@@ -220,7 +220,7 @@ __marimo__/
 # Story Companion local configuration
 /.codex/
 /docs/local/
-.env.*
+.env*
 !.env.example
 
 # User-provided books and generated artifacts

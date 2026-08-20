@@ -29,8 +29,11 @@ before it.
 
 The current slice deliberately has no database. Uploads and boundary selections
 are lost when the API process stops and are not shared across multiple workers.
-LLM integrations, semantic extraction, image generation, and a user interface
-are not implemented yet.
+The evidence and character-result schemas are defined and validated against
+spoiler-safe source offsets. A provider-neutral character extraction endpoint,
+deterministic fake provider, and optional OpenAI adapter exercise the full
+contract. There is still no image generation, database, background worker, or
+user interface.
 
 ## API workflow
 
@@ -62,6 +65,27 @@ curl http://localhost:8000/books/BOOK_ID/context
 
 The context endpoint returns `409 Conflict` until a boundary is selected. There
 is intentionally no API endpoint for retrieving the unrestricted full text.
+
+`POST /books/{book_id}/characters` runs the provider-neutral extraction path.
+Without `OPENAI_API_KEY`, the endpoint returns `503 Service Unavailable`. With a
+key, the application uses `gpt-5.6-luna` by default and validates every returned
+evidence span before exposing the result. The one-pass adapter currently rejects
+contexts over 200,000 characters instead of silently truncating a book. It uses
+`reasoning.effort=none` for this bounded extraction task to limit latency and cost.
+
+## Optional OpenAI provider
+
+Create a dedicated OpenAI Platform project and project-scoped key for Story
+Companion. Copy `.env.example` to `.env`, set the key locally, and do not commit
+that file or paste the key into issues or chat:
+
+```dotenv
+OPENAI_API_KEY=your_key_here
+STORY_COMPANION_OPENAI_MODEL=gpt-5.6-luna
+```
+
+The model setting is deliberately configurable. Automated tests never make
+network calls and do not need an API key.
 
 ## Local setup
 
@@ -103,8 +127,8 @@ make test
 
 ## Docker
 
-Copy the example environment file if you want to change the exposed port or log
-level, then start the service:
+Copy the example environment file if you want to configure the hosted provider,
+exposed port, or log level, then start the service:
 
 ```bash
 cp .env.example .env

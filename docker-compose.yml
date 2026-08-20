@@ -6,6 +6,8 @@ services:
       - "${APP_PORT:-8000}:8000"
     environment:
       LOG_LEVEL: "${LOG_LEVEL:-info}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      STORY_COMPANION_OPENAI_MODEL: "${STORY_COMPANION_OPENAI_MODEL:-gpt-5.6-luna}"
     command:
       - uvicorn
       - story_companion.main:app
