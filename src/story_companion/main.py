@@ -191,7 +191,7 @@ def create_app(
         except CharacterProviderError as error:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Character provider request failed",
+                detail=f"Character provider request failed: {error}",
             ) from error
 
     return application

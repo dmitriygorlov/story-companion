@@ -14,7 +14,7 @@ from story_companion.extraction_schemas import (
     EvidenceSpan,
 )
 from story_companion.main import create_app
-from story_companion.model_provider import FakeCharacterProvider
+from story_companion.model_provider import CharacterProviderError, FakeCharacterProvider
 from story_companion.processing_context import SpoilerSafeBookContext
 
 FIXTURE_PATH = Path(__file__).parents[1] / "fixtures" / "synthetic_book.txt"
@@ -272,8 +272,47 @@ def test_character_endpoint_reports_unconfigured_provider(tmp_path: Path) -> Non
         )
     )
     book_id = upload.json()["book"]["id"]
+    asyncio.run(
+        request(
+            app,
+            "PUT",
+            f"/books/{book_id}/spoiler-boundary",
+            json={"chapter_number": 1},
+        )
+    )
 
     response = asyncio.run(request(app, "POST", f"/books/{book_id}/characters"))
 
     assert response.status_code == 503
     assert response.json()["detail"] == "No character extraction provider is configured"
+
+
+def test_character_endpoint_reports_safe_provider_failure_reason(tmp_path: Path) -> None:
+    def failed_result(context: SpoilerSafeBookContext) -> CharacterExtractionResult:
+        raise CharacterProviderError("evidence excerpt is ambiguous")
+
+    app = create_app(BookWorkspace(tmp_path), FakeCharacterProvider(failed_result))
+    upload = asyncio.run(
+        request(
+            app,
+            "POST",
+            "/books",
+            files={"book_file": ("synthetic_book.txt", FIXTURE_PATH.read_bytes(), "text/plain")},
+        )
+    )
+    book_id = upload.json()["book"]["id"]
+    asyncio.run(
+        request(
+            app,
+            "PUT",
+            f"/books/{book_id}/spoiler-boundary",
+            json={"chapter_number": 1},
+        )
+    )
+
+    response = asyncio.run(request(app, "POST", f"/books/{book_id}/characters"))
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == (
+        "Character provider request failed: evidence excerpt is ambiguous"
+    )

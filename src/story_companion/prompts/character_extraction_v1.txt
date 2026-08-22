@@ -14,9 +14,10 @@ Classify every claim as exactly one of:
 - creative_choice: an invented visual choice. Do not produce creative choices in this extraction.
 
 Every book_fact and model_inference must include at least one evidence span. Each span must use
-the supplied BOOK_ID and chapter number, copy an exact excerpt of at most 500 characters, and
-provide its exact global START_OFFSET and END_OFFSET in the normalized source. END_OFFSET is
-exclusive. Verify that slicing the source from START_OFFSET to END_OFFSET produces the excerpt
-exactly. Never cite a chapter outside the supplied spoiler boundary.
+the supplied chapter number and copy an exact excerpt of at most 500 characters. Copy words,
+punctuation, and capitalization exactly; preserve whitespace and line breaks when possible. Make
+each excerpt long enough to occur only once within that chapter. The application will locate the
+excerpt, safely reconcile whitespace wrapping, and attach trusted source offsets. Never cite a
+chapter outside the supplied spoiler boundary.
 
 Prefer a small set of high-confidence characters and claims over broad or speculative coverage.

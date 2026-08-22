@@ -48,6 +48,8 @@ model-backed stages remain planned.
      deterministic evidence validation before it can leave the service.
    - A fake provider covers the end-to-end contract in tests.
    - An optional OpenAI Responses API adapter uses Pydantic structured output.
+   - The model supplies an exact excerpt and allowed chapter number; Python
+     resolves trusted book identifiers and character offsets deterministically.
      It defaults to `gpt-5.6-luna`, ships a versioned extraction prompt, caps
      output tokens, uses no reasoning effort for the bounded extraction task,
      and rejects oversized one-pass contexts before a paid call.
@@ -119,3 +121,10 @@ Book facts and model inferences require evidence. Creative choices cannot presen
 book evidence as if it directly supported the invented detail. A deterministic
 validator rejects evidence from another book, a later chapter, outside its
 chapter offsets, or with an excerpt that does not exactly match source text.
+Hosted models never calculate or author trusted offsets themselves. The adapter
+accepts only exact excerpts that occur once in the cited allowed chapter, then
+derives offsets from the normalized source before the final validator runs.
+Deterministic matching may reconcile line-wrapping whitespace from TXT input,
+and may discard an altered quote boundary only when a long, unique, contiguous
+subspan remains verbatim. It does not accept changed words or punctuation; the
+returned excerpt is always the exact source slice.

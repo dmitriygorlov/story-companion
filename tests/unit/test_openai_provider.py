@@ -7,7 +7,10 @@ import pytest
 from story_companion.extraction_schemas import (
     EpistemicCategory,
 )
-from story_companion.model_provider import CharacterProviderInputTooLargeError
+from story_companion.model_provider import (
+    CharacterProviderError,
+    CharacterProviderInputTooLargeError,
+)
 from story_companion.openai_provider import (
     CharacterExtractionPayload,
     OpenAICharacterProvider,
@@ -67,10 +70,7 @@ def test_provider_uses_structured_output_and_wraps_context_metadata() -> None:
                         category=EpistemicCategory.BOOK_FACT,
                         evidence=[
                             ProviderEvidenceSpan(
-                                book_id=context.book_id,
                                 chapter_number=1,
-                                start_offset=0,
-                                end_offset=len(excerpt),
                                 excerpt=excerpt,
                             )
                         ],
@@ -91,13 +91,181 @@ def test_provider_uses_structured_output_and_wraps_context_metadata() -> None:
     assert result.book_id == context.book_id
     assert result.through_chapter == 1
     assert result.characters[0].display_name == "Mara"
+    evidence = result.characters[0].claims[0].evidence[0]
+    assert evidence.book_id == context.book_id
+    assert evidence.start_offset == 0
+    assert evidence.end_offset == len(excerpt)
     assert len(client.responses.calls) == 1
     call = client.responses.calls[0]
     assert call["model"] == "test-model"
     assert call["text_format"] is CharacterExtractionPayload
     assert call["reasoning"] == {"effort": "none"}
-    assert "BOOK_ID: book-1" in str(call["input"])
+    assert "BOOK_ID" not in str(call["input"])
     assert "Mara arrived." in str(call["input"])
+
+
+@pytest.mark.parametrize(
+    ("chapter_text", "excerpt", "message"),
+    [
+        ("Mara arrived.", "Mara left.", "not found"),
+        ("Mara arrived. Mara arrived.", "Mara arrived.", "ambiguous"),
+    ],
+)
+def test_provider_rejects_unresolvable_evidence(
+    chapter_text: str,
+    excerpt: str,
+    message: str,
+) -> None:
+    context = SpoilerSafeBookContext(
+        book_id="book-1",
+        through_chapter=1,
+        chapters=(
+            ChapterContext(
+                number=1,
+                title="Chapter 1",
+                start_offset=10,
+                end_offset=10 + len(chapter_text),
+                text=chapter_text,
+            ),
+        ),
+    )
+    payload = CharacterExtractionPayload(
+        characters=[
+            ProviderCharacter(
+                id="mara",
+                display_name="Mara",
+                aliases=[],
+                claims=[
+                    ProviderCharacterClaim(
+                        attribute="action",
+                        value="Arrived",
+                        category=EpistemicCategory.BOOK_FACT,
+                        evidence=[
+                            ProviderEvidenceSpan(
+                                chapter_number=1,
+                                excerpt=excerpt,
+                            )
+                        ],
+                    )
+                ],
+            )
+        ]
+    )
+    provider = OpenAICharacterProvider(
+        api_key="test-key",
+        client=StubOpenAIClient(payload),
+    )
+
+    with pytest.raises(CharacterProviderError, match=message):
+        asyncio.run(provider.extract_characters(context))
+
+
+def test_provider_resolves_wrapped_source_text_to_exact_offsets() -> None:
+    chapter_text = "Mara arrived before\nsunrise."
+    model_excerpt = "Mara arrived before sunrise."
+    context = SpoilerSafeBookContext(
+        book_id="book-1",
+        through_chapter=1,
+        chapters=(
+            ChapterContext(
+                number=1,
+                title="Chapter 1",
+                start_offset=20,
+                end_offset=20 + len(chapter_text),
+                text=chapter_text,
+            ),
+        ),
+    )
+    payload = CharacterExtractionPayload(
+        characters=[
+            ProviderCharacter(
+                id="mara",
+                display_name="Mara",
+                aliases=[],
+                claims=[
+                    ProviderCharacterClaim(
+                        attribute="action",
+                        value="Arrived before sunrise",
+                        category=EpistemicCategory.BOOK_FACT,
+                        evidence=[
+                            ProviderEvidenceSpan(
+                                chapter_number=1,
+                                excerpt=model_excerpt,
+                            )
+                        ],
+                    )
+                ],
+            )
+        ]
+    )
+    provider = OpenAICharacterProvider(
+        api_key="test-key",
+        client=StubOpenAIClient(payload),
+    )
+
+    result = asyncio.run(provider.extract_characters(context))
+
+    evidence = result.characters[0].claims[0].evidence[0]
+    assert evidence.start_offset == 20
+    assert evidence.end_offset == 20 + len(chapter_text)
+    assert evidence.excerpt == chapter_text
+
+
+def test_provider_recovers_long_unique_exact_subspan_from_changed_edge() -> None:
+    chapter_text = (
+        "The dog belongs to a farmer, you know, and he says it is very useful in the quiet fields."
+    )
+    model_excerpt = (
+        "The dog will belong to a farmer, you know, and he says it is very useful "
+        "in the quiet fields."
+    )
+    context = SpoilerSafeBookContext(
+        book_id="book-1",
+        through_chapter=1,
+        chapters=(
+            ChapterContext(
+                number=1,
+                title="Chapter 1",
+                start_offset=0,
+                end_offset=len(chapter_text),
+                text=chapter_text,
+            ),
+        ),
+    )
+    payload = CharacterExtractionPayload(
+        characters=[
+            ProviderCharacter(
+                id="dog",
+                display_name="the dog",
+                aliases=[],
+                claims=[
+                    ProviderCharacterClaim(
+                        attribute="owner",
+                        value="Belongs to a farmer",
+                        category=EpistemicCategory.BOOK_FACT,
+                        evidence=[
+                            ProviderEvidenceSpan(
+                                chapter_number=1,
+                                excerpt=model_excerpt,
+                            )
+                        ],
+                    )
+                ],
+            )
+        ]
+    )
+    provider = OpenAICharacterProvider(
+        api_key="test-key",
+        client=StubOpenAIClient(payload),
+    )
+
+    result = asyncio.run(provider.extract_characters(context))
+
+    evidence = result.characters[0].claims[0].evidence[0]
+    assert evidence.excerpt in chapter_text
+    assert len(evidence.excerpt) >= 40
+    assert "will belong" not in evidence.excerpt
+    assert chapter_text[evidence.start_offset : evidence.end_offset] == evidence.excerpt
 
 
 def test_provider_rejects_oversized_context_before_call() -> None:
