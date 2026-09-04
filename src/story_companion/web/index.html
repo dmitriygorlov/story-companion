@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Story Companion is a spoiler-safe, evidence-grounded AI reading companion."
+    >
+    <title>Story Companion — Read deeply. Stay unspoiled.</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script src="/assets/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#workspace">Skip to the reading workspace</a>
+
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Story Companion home">
+        <span class="brand-mark" aria-hidden="true">SC</span>
+        <span>Story Companion</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="#how-it-works">How it works</a>
+        <a href="#principles">Principles</a>
+        <a class="nav-cta" href="/docs">API docs</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">An evidence-first reading companion</p>
+          <h1 id="hero-title">Read deeply.<br><em>Stay unspoiled.</em></h1>
+          <p class="hero-lead">
+            Keep track of characters, clues, and journeys using only the chapters
+            you have finished. Every fact comes back with a passage from the book.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#workspace">Open the companion</a>
+            <button class="button button-quiet" id="hero-demo-button" type="button">
+              Preview the sample story
+            </button>
+          </div>
+          <ul class="trust-list" aria-label="Product guarantees">
+            <li><span aria-hidden="true">✓</span> Reader-controlled boundary</li>
+            <li><span aria-hidden="true">✓</span> Exact source evidence</li>
+            <li><span aria-hidden="true">✓</span> Facts and inferences stay separate</li>
+          </ul>
+        </div>
+
+        <div class="hero-map" aria-label="Illustrated route from Brambleford to the river">
+          <div class="map-paper">
+            <div class="map-heading">
+              <span>Reader's field notes</span>
+              <span class="map-scale">1¼ mi</span>
+            </div>
+            <svg viewBox="0 0 520 360" role="img" aria-labelledby="map-title map-desc">
+              <title id="map-title">A spoiler-safe route map</title>
+              <desc id="map-desc">
+                A hand-drawn route connects Brambleford clock tower to the ferry and river marker.
+                The north road remains locked beyond the current chapter.
+              </desc>
+              <path class="river" d="M-20 245 C90 195, 160 300, 275 242 S440 170, 550 218" />
+              <path class="route" d="M82 110 C150 130, 176 188, 238 214 S350 238, 414 172" />
+              <path class="route route-locked" d="M414 172 C448 116, 456 70, 486 26" />
+              <circle class="place-dot current" cx="82" cy="110" r="10" />
+              <circle class="place-dot current" cx="238" cy="214" r="10" />
+              <circle class="place-dot current" cx="414" cy="172" r="10" />
+              <circle class="place-dot locked" cx="486" cy="26" r="10" />
+              <text x="42" y="82">Clock tower</text>
+              <text x="196" y="254">Ferry</text>
+              <text x="370" y="150">River marker</text>
+              <text class="locked-label" x="378" y="42">North road · locked</text>
+              <text class="river-label" x="50" y="292">River Lume</text>
+              <path class="compass-line" d="M458 292 L458 337 M436 314 L480 314" />
+              <text class="compass-n" x="450" y="285">N</text>
+            </svg>
+            <div class="map-boundary">
+              <span class="lock-dot" aria-hidden="true"></span>
+              Safe through Chapter 2
+            </div>
+          </div>
+          <div class="annotation annotation-one">Every route needs a source.</div>
+          <div class="annotation annotation-two">Later chapters stay folded away.</div>
+        </div>
+      </section>
+
+      <section class="origin-note" aria-label="Why Story Companion exists">
+        <p class="origin-label">A small personal project</p>
+        <p>
+          I started Story Companion for my niece, who loves remembering who is who
+          without accidentally learning what happens next. I kept building it for
+          myself—the kind of reader who sketches routes in the margin and wonders
+          how far the characters really travelled.
+        </p>
+      </section>
+
+      <section class="workspace-section" id="workspace" aria-labelledby="workspace-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Your reading desk</p>
+            <h2 id="workspace-title">Build a companion for this chapter</h2>
+          </div>
+          <div class="runtime-pill" id="runtime-pill" data-status="checking">
+            <span class="runtime-dot" aria-hidden="true"></span>
+            <span id="runtime-label">Checking local setup…</span>
+          </div>
+        </div>
+
+        <div class="workspace-grid">
+          <aside class="setup-panel" aria-label="Book setup">
+            <section class="setup-step" aria-labelledby="upload-title">
+              <div class="step-number">01</div>
+              <div class="step-content">
+                <h3 id="upload-title">Bring your book</h3>
+                <p>UTF-8 plain text, up to 5 MB. The file stays in a temporary workspace.</p>
+                <label class="drop-zone" id="drop-zone" for="book-file">
+                  <input id="book-file" name="book_file" type="file" accept=".txt,text/plain">
+                  <span class="drop-icon" aria-hidden="true">＋</span>
+                  <strong>Choose a TXT book</strong>
+                  <span>or drop it here</span>
+                </label>
+                <div class="or-divider"><span>or</span></div>
+                <button class="text-button" id="demo-button" type="button">
+                  Use “The Lantern at Brambleford” demo →
+                </button>
+              </div>
+            </section>
+
+            <section class="setup-step is-disabled" id="boundary-step" aria-labelledby="boundary-title">
+              <div class="step-number">02</div>
+              <div class="step-content">
+                <h3 id="boundary-title">Set your horizon</h3>
+                <p id="book-summary">Upload a book to detect its chapters.</p>
+                <div class="boundary-control">
+                  <label for="chapter-range">
+                    I have finished <strong id="boundary-label">Chapter 1</strong>
+                  </label>
+                  <input id="chapter-range" type="range" min="1" max="1" value="1" disabled>
+                </div>
+                <ol class="chapter-trail" id="chapter-trail" aria-label="Detected chapters"></ol>
+              </div>
+            </section>
+
+            <section class="setup-step is-disabled" id="analysis-step" aria-labelledby="analysis-title">
+              <div class="step-number">03</div>
+              <div class="step-content">
+                <h3 id="analysis-title">Meet the cast</h3>
+                <p id="analysis-help">
+                  Only text through your selected chapter can reach the analysis stage.
+                </p>
+                <button class="button button-primary button-wide" id="analyze-button" type="button" disabled>
+                  Build my companion
+                </button>
+              </div>
+            </section>
+
+            <div class="status-message" id="status-message" role="status" aria-live="polite"></div>
+          </aside>
+
+          <section class="results-panel" aria-labelledby="results-title">
+            <div class="results-empty" id="results-empty">
+              <div class="empty-orbit" aria-hidden="true">
+                <span class="orbit orbit-one"></span>
+                <span class="orbit orbit-two"></span>
+                <span class="orbit-core">SC</span>
+              </div>
+              <p class="eyebrow">Nothing beyond your bookmark</p>
+              <h3 id="results-title">Character notes will appear here</h3>
+              <p>
+                Upload a book, choose the last chapter you have read, and Story Companion
+                will build profiles with evidence you can inspect.
+              </p>
+            </div>
+
+            <div class="results-content" id="results-content" hidden>
+              <div class="results-toolbar">
+                <div>
+                  <p class="eyebrow" id="results-kicker">Spoiler-safe companion</p>
+                  <h3 id="results-heading">Your cast so far</h3>
+                </div>
+                <span class="sample-badge" id="sample-badge" hidden>Static sample</span>
+              </div>
+              <div class="result-stats" id="result-stats"></div>
+              <div class="provenance-key" id="principles">
+                <div><span class="claim-dot fact"></span><strong>Book fact</strong><small>Explicit in the text</small></div>
+                <div><span class="claim-dot inference"></span><strong>Model inference</strong><small>Interpretation with evidence</small></div>
+                <div><span class="claim-dot creative"></span><strong>Creative choice</strong><small>Never presented as fact</small></div>
+              </div>
+              <div class="character-grid" id="character-grid"></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="how-section" id="how-it-works" aria-labelledby="how-title">
+        <div class="section-heading compact">
+          <div>
+            <p class="eyebrow">The contract</p>
+            <h2 id="how-title">Spoiler safety is architecture, not a prompt</h2>
+          </div>
+        </div>
+        <div class="principle-grid">
+          <article>
+            <span class="principle-index">01</span>
+            <h3>The reader draws the line</h3>
+            <p>A chapter boundary is selected before any semantic processing begins.</p>
+          </article>
+          <article>
+            <span class="principle-index">02</span>
+            <h3>Later text is inaccessible</h3>
+            <p>Downstream providers receive a pre-built context containing only allowed chapters.</p>
+          </article>
+          <article>
+            <span class="principle-index">03</span>
+            <h3>Evidence is checked in code</h3>
+            <p>Every citation must resolve to an exact source span inside the selected boundary.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="roadmap-band" aria-label="Planned reading tools">
+        <div>
+          <p class="eyebrow">Where the path leads</p>
+          <h2>Characters today. Relationships, timelines, and route maps next.</h2>
+        </div>
+        <div class="roadmap-items">
+          <span>Relationship graph</span>
+          <span>Event timeline</span>
+          <span>Journey map</span>
+          <span>Illustration brief</span>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="brand footer-brand"><span class="brand-mark">SC</span><span>Story Companion</span></div>
+      <p>Made for curious readers and carefully placed bookmarks.</p>
+      <div class="footer-links"><a href="/docs">OpenAPI</a><a href="/health">Health</a></div>
+    </footer>
+  </body>
+</html>

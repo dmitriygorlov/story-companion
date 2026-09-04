@@ -40,6 +40,51 @@ def test_health_returns_ok(tmp_path: Path) -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_web_client_and_public_runtime_config(tmp_path: Path) -> None:
+    app = create_app(BookWorkspace(tmp_path))
+
+    page = asyncio.run(request(app, "GET", "/"))
+    config = asyncio.run(request(app, "GET", "/config"))
+    stylesheet = asyncio.run(request(app, "GET", "/assets/styles.css"))
+    favicon = asyncio.run(request(app, "GET", "/assets/favicon.svg"))
+    demo_story = asyncio.run(request(app, "GET", "/demo/the-lantern-at-brambleford.txt"))
+
+    assert page.status_code == 200
+    assert "Read deeply" in page.text
+    assert "Story Companion" in page.text
+    assert page.headers["x-frame-options"] == "DENY"
+    assert "default-src 'self'" in page.headers["content-security-policy"]
+    assert config.status_code == 200
+    assert config.json() == {
+        "app_version": "0.2.0",
+        "ai_enabled": False,
+        "max_upload_bytes": 5 * 1024 * 1024,
+        "accepted_formats": [".txt"],
+    }
+    assert stylesheet.status_code == 200
+    assert "--forest" in stylesheet.text
+    assert favicon.status_code == 200
+    assert favicon.headers["content-type"].startswith("image/svg+xml")
+    assert demo_story.status_code == 200
+    assert "CHAPTER 3: THE NORTH ROAD" in demo_story.text
+
+
+def test_runtime_config_reports_injected_character_provider(tmp_path: Path) -> None:
+    provider = FakeCharacterProvider(
+        lambda context: CharacterExtractionResult(
+            book_id=context.book_id,
+            through_chapter=context.through_chapter,
+            characters=[],
+        )
+    )
+    app = create_app(BookWorkspace(tmp_path), provider)
+
+    response = asyncio.run(request(app, "GET", "/config"))
+
+    assert response.status_code == 200
+    assert response.json()["ai_enabled"] is True
+
+
 def test_upload_select_boundary_and_read_safe_context(tmp_path: Path) -> None:
     app = create_app(BookWorkspace(tmp_path))
     fixture_content = FIXTURE_PATH.read_bytes()

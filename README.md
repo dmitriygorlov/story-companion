@@ -1,138 +1,161 @@
 # Story Companion
 
-Story Companion is a spoiler-safe AI reading companion for user-provided books.
-It is intended to turn a reader's current progress into evidence-grounded
-character profiles, relationships, timelines, and optional illustrations.
+[![CI](https://github.com/dmitriygorlov/story-companion/actions/workflows/ci.yml/badge.svg)](https://github.com/dmitriygorlov/story-companion/actions/workflows/ci.yml)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-174f43.svg)](https://www.python.org/downloads/release/python-3120/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-9b3b42.svg)](LICENSE)
 
-The central product rule is provenance: the application must clearly separate
-facts stated in the book from model inferences and creative visual choices.
+**Read deeply. Stay unspoiled.**
 
-## Planned features
+Story Companion is an evidence-first AI reading companion. Give it a UTF-8 text
+book, mark the last chapter you have finished, and get character notes built only
+from the permitted part of the story. Every factual or interpretive claim carries
+a source passage that the application validates against the book.
 
-- Book upload and text processing for supported formats
-- Reader-controlled progress boundaries to prevent future events from leaking
-- Character profiles with citations to the source text
-- Relationship maps and event timelines
-- Explicit labels for stated facts, model inferences, and creative choices
-- Optional, spoiler-safe character illustrations
+I started the project for my niece, who loves remembering who is who without
+accidentally learning what happens next. I kept building it for myself: I am the
+kind of reader who sketches routes in the margin and wonders how far the
+characters travelled and how long the journey should have taken.
 
-See [the product specification](docs/product-spec.md) and
-[the planned architecture](docs/architecture.md) for more detail.
+![Story Companion landing page with a spoiler-safe route map](docs/screenshots/story-companion-hero.png)
 
-## Current status
+## What works today
 
-The first thin vertical slice is implemented. The API accepts a UTF-8 TXT book,
-stores it in a process-local temporary workspace, detects probable chapter
-headings, and lets the client select an inclusive spoiler boundary. Text exposed
-for subsequent processing is restricted to the selected chapter and everything
-before it.
+- A responsive browser interface with no frontend build step
+- UTF-8 `.txt` uploads up to 5 MB
+- Deterministic detection of `Chapter ...`, `Prologue`, and `Epilogue` headings
+- A reader-controlled, inclusive chapter boundary
+- A spoiler-safe context object that physically excludes later chapters
+- Provider-neutral character extraction with an optional OpenAI adapter
+- Explicit `book_fact`, `model_inference`, and `creative_choice` categories
+- Exact source excerpts with deterministic book, chapter, and offset validation
+- An original three-chapter demo that works without an API key or paid call
+- Interactive OpenAPI documentation at `/docs`
 
-The current slice deliberately has no database. Uploads and boundary selections
-are lost when the API process stops and are not shared across multiple workers.
-The evidence and character-result schemas are defined and validated against
-spoiler-safe source offsets. A provider-neutral character extraction endpoint,
-deterministic fake provider, and optional OpenAI adapter exercise the full
-contract. There is still no image generation, database, background worker, or
-user interface.
+![Evidence-grounded character results through chapter two](docs/screenshots/story-companion-results.png)
 
-## API workflow
+The bundled demo is intentionally small and original. It runs through the real
+upload, chapter-detection, and boundary APIs, then displays a checked-in sample
+result. The sample's citations are tested by the same provenance validator used
+for provider output.
 
-Upload a UTF-8 `.txt` file of up to 5 MB:
+## Try the demo locally
 
-```bash
-curl -F "book_file=@path/to/book.txt;type=text/plain" \
-  http://localhost:8000/books
-```
-
-The response contains a generated book ID, file metadata, and a numbered list of
-probable chapters. Chapter detection is deterministic and recognizes headings on
-their own line such as `Chapter 1`, `Chapter III: Return`, `Prologue`, and
-`Epilogue`. A book with no recognized headings is treated as one chapter.
-
-Select the last chapter that processing may access:
+Prerequisites: Python 3.12 and, optionally, `make`.
 
 ```bash
-curl -X PUT -H "Content-Type: application/json" \
-  -d '{"chapter_number": 2}' \
-  http://localhost:8000/books/BOOK_ID/spoiler-boundary
-```
-
-Retrieve the spoiler-safe context that future processing stages will consume:
-
-```bash
-curl http://localhost:8000/books/BOOK_ID/context
-```
-
-The context endpoint returns `409 Conflict` until a boundary is selected. There
-is intentionally no API endpoint for retrieving the unrestricted full text.
-
-`POST /books/{book_id}/characters` runs the provider-neutral extraction path.
-Without `OPENAI_API_KEY`, the endpoint returns `503 Service Unavailable`. With a
-key, the application uses `gpt-5.6-luna` by default and validates every returned
-evidence span before exposing the result. The one-pass adapter currently rejects
-contexts over 200,000 characters instead of silently truncating a book. It uses
-`reasoning.effort=none` for this bounded extraction task to limit latency and cost.
-
-## Optional OpenAI provider
-
-Create a dedicated OpenAI Platform project and project-scoped key for Story
-Companion. Copy `.env.example` to `.env`, set the key locally, and do not commit
-that file or paste the key into issues or chat:
-
-```dotenv
-OPENAI_API_KEY=your_key_here
-STORY_COMPANION_OPENAI_MODEL=gpt-5.6-luna
-```
-
-The model setting is deliberately configurable. Automated tests never make
-network calls and do not need an API key.
-
-## Local setup
-
-Prerequisites:
-
-- Python 3.12
-- `make` (optional; the underlying Python commands can be run directly)
-
-Create and activate a virtual environment, then install the project:
-
-```bash
+git clone https://github.com/dmitriygorlov/story-companion.git
+cd story-companion
 python -m venv .venv
 source .venv/bin/activate
-make setup
+python -m pip install -e ".[dev]"
+python -m uvicorn story_companion.main:app --reload
 ```
 
 On Windows PowerShell, activate the environment with:
 
 ```powershell
 .venv\Scripts\Activate.ps1
-make setup
+python -m pip install -e ".[dev]"
+python -m uvicorn story_companion.main:app --reload
 ```
 
-Run the API:
+Open <http://localhost:8000> and choose **Preview the sample story**. No API key
+is required for this path.
+
+Convenience commands are also available:
 
 ```bash
-make run
+make setup   # install the project and development tools
+make run     # start the local application
+make check   # lint, format-check, and test
 ```
 
-The health check is available at <http://localhost:8000/health>. Interactive API
-documentation is available at <http://localhost:8000/docs>.
+## Use live character extraction
 
-Run the quality checks:
+Create a project-scoped OpenAI API key, copy `.env.example` to `.env`, and set:
+
+```dotenv
+OPENAI_API_KEY=your_project_key_here
+STORY_COMPANION_OPENAI_MODEL=gpt-5.6-luna
+```
+
+The model is configurable. Keys stay in the untracked `.env` file; the public
+`/config` endpoint exposes only whether extraction is available. Automated tests
+never make network calls.
+
+The current adapter makes one structured extraction request and rejects contexts
+over 200,000 characters instead of silently truncating them. Any returned claim
+with missing, altered, ambiguous, out-of-range, or future-chapter evidence is
+rejected before it reaches the reader.
+
+## API workflow
+
+The web interface uses the same small HTTP workflow available to other clients:
+
+```text
+POST /books
+  -> detected chapter list and opaque book ID
+
+PUT /books/{book_id}/spoiler-boundary
+  -> inclusive last-readable chapter
+
+GET /books/{book_id}/context
+  -> text through that boundary only
+
+POST /books/{book_id}/characters
+  -> evidence-grounded character profiles
+```
+
+There is deliberately no endpoint that returns an uploaded book's unrestricted
+full text. See the [architecture](docs/architecture.md) for the trust boundary and
+the [product specification](docs/product-spec.md) for product behavior.
+
+## Docker
+
+```bash
+docker compose up --build
+```
+
+Then open <http://localhost:8000>. Docker uses the same optional environment
+variables from `.env.example`.
+
+## Privacy, copyright, and current limits
+
+- Upload only books you are entitled to process. This repository contains no
+  third-party book text.
+- Uploaded text is stored in a temporary local directory and removed on normal
+  process shutdown. Book metadata and boundaries live in memory.
+- A restart loses all uploaded books and results; multiple workers do not share
+  state. This release is a local, single-user MVP, not a hosted multi-user service.
+- Chapter detection is a transparent heuristic. The detected list is shown to the
+  reader before a boundary is chosen.
+- The OpenAI adapter sends only the spoiler-safe context to the configured model
+  provider. The offline demo sends nothing externally.
+
+## Roadmap
+
+The next slices build on the same evidence contract:
+
+1. Relationships and an event timeline with per-edge citations
+2. Journey legs, stated distances, inferred travel time, and an uncertainty-aware map
+3. Optional illustration briefs that keep creative decisions separate from canon
+4. Durable storage, explicit deletion, authentication, and background processing
+
+## Development
 
 ```bash
 make lint
 make test
+# or run both
+make check
 ```
 
-## Docker
+CI runs Ruff and pytest on Python 3.12. The application is intentionally compact:
+FastAPI and Pydantic on the backend, plain HTML/CSS/JavaScript in the browser, and
+no database, Redis, queue, or frontend framework in this release.
 
-Copy the example environment file if you want to configure the hosted provider,
-exposed port, or log level, then start the service:
+## Project status
 
-```bash
-cp .env.example .env
-docker compose up --build
-```
-
-The default address is <http://localhost:8000>.
+Version `0.2.0` is a complete local MVP for spoiler-safe character profiles. The
+relationship, timeline, journey-map, and illustration stages remain roadmap items
+and are not represented as finished features.

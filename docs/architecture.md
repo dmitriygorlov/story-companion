@@ -1,130 +1,183 @@
-# Planned Architecture
+# Story Companion Architecture
 
-## Principles
+## Design rule
 
-- Enforce the spoiler boundary before retrieval or generation.
-- Preserve source location and provenance through every processing stage.
-- Store book facts, model inferences, and creative choices as distinct data types.
-- Prefer deterministic validation around probabilistic model output.
-- Keep uploaded text private and make deletion behavior explicit.
+Spoiler safety is enforced before probabilistic processing begins. A prompt may
+describe the rule, but the trusted control is the Python workspace that builds a
+new context containing only chapters at or before the reader's boundary.
 
-## Processing pipeline
+```text
+Browser / API client
+        |
+        v
+Upload validation -> deterministic chapter detection -> temporary UTF-8 file
+        |                                                   |
+        +-------- reader selects inclusive boundary --------+
+                                                            |
+                                                            v
+                                            spoiler-safe byte-prefix read
+                                                            |
+                                                            v
+                                            SpoilerSafeBookContext
+                                                            |
+                                      +---------------------+------------------+
+                                      |                                        |
+                                      v                                        v
+                            character provider                    deterministic validator
+                                      |                                        |
+                                      +---------- structured result -----------+
+                                                            |
+                                                            v
+                                            evidence-grounded API / UI
+```
 
-The current thin slice implements the deterministic path through upload,
-normalization, chapter detection, and spoiler-boundary enforcement. Later
-model-backed stages remain planned.
+The unrestricted stored file is an implementation detail of `BookWorkspace`.
+Semantic services receive `SpoilerSafeBookContext`, not a path and not the full
+book.
 
-1. **Upload and validation**
-   - Implemented for UTF-8 `.txt` files up to 5 MB.
-   - Reject invalid encodings, empty files, and other file extensions.
-   - Assign an opaque book identifier and save a normalized UTF-8 copy in a
-     process-local temporary workspace.
+## Implemented components
 
-2. **Text extraction and normalization**
-   - TXT decoding and UTF-8 normalization are implemented.
-   - A deterministic line-based detector recognizes probable `Chapter ...`,
-     `Prologue`, and `Epilogue` headings and retains character offsets.
-   - Rich document extraction and extraction warnings remain planned.
+### FastAPI application
 
-3. **Segmentation and evidence indexing**
-   - Chapter-level segmentation is implemented.
-   - A spoiler-safe processing context now carries allowed chapter text and
-     stable character offsets in the normalized source.
-   - Claim-level evidence schemas and deterministic provenance validation are
-     implemented; fine-grained retrieval indexes remain planned.
+`story_companion.main` owns HTTP validation and assembles dependencies.
 
-4. **Spoiler-boundary resolution**
-   - Implemented as an inclusive detected-chapter number.
-   - Missing and out-of-range boundaries are rejected.
-   - The workspace reads only the UTF-8 byte prefix ending at the selected
-     chapter. This spoiler-safe context is the only text interface intended for
-     subsequent processing stages.
+- `GET /` serves the bundled web client.
+- `GET /config` exposes secret-free runtime capabilities.
+- `GET /health` reports process readiness.
+- `POST /books` validates and stores one UTF-8 TXT book.
+- `GET /books/{book_id}` returns metadata and detected chapters.
+- `PUT /books/{book_id}/spoiler-boundary` selects the inclusive boundary.
+- `GET /books/{book_id}/context` exposes the spoiler-safe text surface.
+- `POST /books/{book_id}/characters` runs extraction and validation.
 
-5. **Entity and event extraction**
-   - Character, claim, epistemic-category, evidence, and extraction-result
-     schemas are defined.
-   - An async provider protocol and extraction service are implemented. The
-     provider receives only `SpoilerSafeBookContext`, and every result passes
-     deterministic evidence validation before it can leave the service.
-   - A fake provider covers the end-to-end contract in tests.
-   - An optional OpenAI Responses API adapter uses Pydantic structured output.
-   - The model supplies an exact excerpt and allowed chapter number; Python
-     resolves trusted book identifiers and character offsets deterministically.
-     It defaults to `gpt-5.6-luna`, ships a versioned extraction prompt, caps
-     output tokens, uses no reasoning effort for the bounded extraction task,
-     and rejects oversized one-pass contexts before a paid call.
-   - Extract character mentions, aliases, relationships, and events.
-   - Require evidence-span identifiers for every proposed book fact.
-   - Keep extraction results provisional until validation and reconciliation.
+Static responses include a restrictive Content Security Policy, denied framing,
+no-referrer behavior, and MIME sniffing protection.
 
-6. **Reconciliation and provenance validation**
-   - Merge aliases and repeated mentions without losing evidence links.
-   - Detect contradictions and unsupported claims.
-   - Classify each item as a book fact or a model inference.
+### Browser client
 
-7. **Reader views**
-   - Assemble spoiler-safe profiles, relationship data, and timelines.
-   - Return citations and provenance labels with each item.
-   - Omit or qualify claims that do not pass evidence checks.
+The client is plain HTML, CSS, and JavaScript packaged with the Python
+application. It has no Node build step and no external runtime assets. It:
 
-8. **Optional illustration planning**
-   - Build a visual brief only from allowed facts.
-   - Label additions such as clothing details or lighting as creative choices.
-   - Generate images in a separate, optional stage.
+1. uploads a file;
+2. renders the detected chapter list;
+3. persists the chosen boundary through the API;
+4. requests character extraction;
+5. renders provenance categories and expandable evidence passages.
 
-## Planned components
+All book/model strings are inserted with DOM text APIs rather than HTML
+interpolation.
 
-- **FastAPI service:** HTTP API, validation, and orchestration boundaries.
-- **Background workers:** file processing and model-backed stages that should not
-  block API requests.
-- **Persistent store:** book metadata, progress boundaries, structured results,
-  evidence links, and processing state.
-- **Object storage:** uploaded books and generated assets with lifecycle controls.
-- **Retrieval layer:** spoiler-scoped evidence lookup.
-- **Model adapters:** isolated interfaces for extraction, inference, and optional
-  illustration providers.
+### Chapter detection
 
-The choice of database, task queue, and frontend is deferred. OpenAI is the first
-hosted extraction adapter, but the core service remains provider-neutral.
+`chapter_detection.py` uses deterministic, line-based rules for headings such
+as `Chapter 1`, `Chapter III: Return`, `Prologue`, and `Epilogue`.
+Character offsets are retained in the normalized source. If no heading is found,
+the whole document becomes one chapter.
 
-## Current runtime boundaries
+This is deliberately a transparent heuristic. The client shows its output before
+the reader selects a boundary.
 
-Book metadata and spoiler selections live in process memory, while uploaded text
-lives in an operating-system temporary directory owned by the API process. The
-temporary directory is cleaned up when the process exits under normal conditions.
-This design is suitable only for the first single-process slice: restarts lose
-state, multiple API workers do not share books, and there is no user isolation or
-durable deletion workflow yet.
+### Temporary book workspace
 
-The chapter detector is a transparent heuristic, not a parser for every possible
-book layout. Its output is returned to the client for review before the spoiler
-boundary is selected. Future formats can add dedicated extraction adapters while
-keeping the same spoiler-scoped workspace interface.
+`BookWorkspace`:
 
-For the current TXT adapter, front matter before the first detected heading is
-excluded from processing context. This prevents a table of contents from leaking
-future chapter titles through an early spoiler boundary. All evidence offsets are
-Python character offsets in the normalized UTF-8 text, not byte positions in the
-originally uploaded file.
+- gives each upload an opaque UUID;
+- writes a normalized UTF-8 copy under an OS temporary directory;
+- keeps metadata and boundary state in process memory;
+- converts chapter character endings to UTF-8 byte endings once at upload time;
+- reads only the required byte prefix for later processing;
+- excludes front matter before the first detected chapter from semantic context.
 
-## Core provenance model
+The context keeps source character offsets so evidence can be mapped back to the
+normalized book.
 
-The initial character extraction contract represents:
+### Extraction service and provider boundary
 
-- The provisional character and aliases
-- Each individual claim or creative detail
-- Its classification: `book_fact`, `model_inference`, or `creative_choice`
-- Exact supporting book, chapter, character offsets, and excerpt when applicable
-- The reader progress boundary and schema version used to produce the result
+`CharacterExtractionService` has a narrow sequence:
 
-Book facts and model inferences require evidence. Creative choices cannot present
-book evidence as if it directly supported the invented detail. A deterministic
-validator rejects evidence from another book, a later chapter, outside its
-chapter offsets, or with an excerpt that does not exactly match source text.
-Hosted models never calculate or author trusted offsets themselves. The adapter
-accepts only exact excerpts that occur once in the cited allowed chapter, then
-derives offsets from the normalized source before the final validator runs.
-Deterministic matching may reconcile line-wrapping whitespace from TXT input,
-and may discard an altered quote boundary only when a long, unique, contiguous
-subspan remains verbatim. It does not accept changed words or punctuation; the
-returned excerpt is always the exact source slice.
+1. build `SpoilerSafeBookContext`;
+2. pass that object to a `CharacterProvider`;
+3. validate the complete result;
+4. return it only if validation succeeds.
+
+The provider interface is independent of a vendor. Tests use deterministic fake
+providers. The optional OpenAI adapter uses the Responses API with Pydantic
+structured output, a versioned prompt, a 5,000-token output cap, and a
+200,000-character input guard. The default model is configurable and currently
+`gpt-5.6-luna`.
+
+The model proposes chapter numbers and excerpts. Python finds a unique permitted
+source span and derives trusted offsets; the model does not author those offsets.
+
+### Provenance validator
+
+Every `book_fact` and `model_inference` must have evidence. For each evidence
+span, validation checks:
+
+- the expected book ID;
+- a chapter at or before the active boundary;
+- offsets contained inside that chapter;
+- an excerpt exactly equal to the normalized source slice.
+
+Whitespace introduced by TXT line wrapping can be reconciled deterministically.
+An altered quote boundary is recoverable only when a long, unique, contiguous
+verbatim subspan remains. Changed words and punctuation are not accepted.
+
+`creative_choice` is a separate schema category and cannot present book
+evidence as direct support for invented detail.
+
+### Offline demo
+
+`web/demo/the-lantern-at-brambleford.txt` is a short original fixture. The
+browser uploads it through the production endpoints and chooses chapter two.
+It then displays `example-result.json` without a model call. A unit test loads
+both package resources and runs the sample result through the production
+provenance validator, including an assertion that the chapter-three reveal is
+absent.
+
+## Runtime and trust boundaries
+
+The 0.2.0 runtime is local and single-process:
+
+- uploaded text lives in an OS temporary directory;
+- metadata and reader progress live in memory;
+- process restart loses all state;
+- multiple Uvicorn workers would not share books;
+- there is no account or tenant isolation;
+- normal temporary-directory cleanup happens on process shutdown, but there is
+  not yet a user-facing deletion workflow.
+
+The web demo is fully offline. Live extraction sends only the selected
+spoiler-safe context to the configured provider. API keys are read from the
+environment and never returned by `/config`.
+
+## Planned pipeline
+
+New stages should consume the same spoiler-safe context and emit the same
+provenance primitives.
+
+1. **Entity reconciliation** — merge aliases while preserving claim evidence.
+2. **Relationships** — version edges by chapter and cite each change.
+3. **Timeline** — retain stated ordering separately from inferred ordering.
+4. **Journey model** — represent locations, legs, quoted distances, calculated
+   estimates, and unknown gaps.
+5. **Map assembly** — distinguish book geography from cartographic layout.
+6. **Illustration brief** — derive visual facts from allowed evidence and label
+   every added aesthetic detail as a creative choice.
+
+Only after those contracts stabilize should the project add durable storage,
+background jobs, object storage, authentication, or multi-user deployment.
+
+## Deferred infrastructure
+
+The release intentionally does not include:
+
+- a database or migration system;
+- Redis, queues, or background workers;
+- object storage;
+- a retrieval/vector index;
+- a JavaScript framework or frontend build pipeline;
+- image generation.
+
+Keeping these decisions deferred makes the trust boundary and product behavior
+easy to review before operational complexity is introduced.

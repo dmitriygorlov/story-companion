@@ -1,8 +1,11 @@
 """FastAPI application entry point."""
 
+from importlib.resources import files
 from typing import Annotated, Literal
 
-from fastapi import FastAPI, File, HTTPException, UploadFile, status
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, status
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from story_companion import __version__
@@ -24,12 +27,14 @@ from story_companion.schemas import (
     BookMetadata,
     BookResponse,
     ChapterMetadata,
+    RuntimeConfigResponse,
     SpoilerBoundaryResponse,
     SpoilerBoundarySelection,
     SpoilerSafeContextResponse,
 )
 
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+WEB_ROOT = files("story_companion").joinpath("web")
 
 
 class HealthResponse(BaseModel):
@@ -50,6 +55,51 @@ def create_app(
         description="Spoiler-safe, evidence-grounded reading companion API.",
         version=__version__,
     )
+    application.mount(
+        "/assets",
+        StaticFiles(directory=str(WEB_ROOT.joinpath("assets"))),
+        name="assets",
+    )
+    application.mount(
+        "/demo",
+        StaticFiles(directory=str(WEB_ROOT.joinpath("demo"))),
+        name="demo",
+    )
+
+    @application.middleware("http")
+    async def add_security_headers(request: Request, call_next):
+        """Apply conservative browser defaults to API and web responses."""
+
+        response = await call_next(request)
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; base-uri 'none'; form-action 'self'; "
+            "frame-ancestors 'none'; img-src 'self' data:; "
+            "script-src 'self'; style-src 'self'; connect-src 'self'"
+        )
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        return response
+
+    @application.get("/", include_in_schema=False)
+    def web_client() -> FileResponse:
+        """Serve the lightweight reading companion interface."""
+
+        return FileResponse(
+            str(WEB_ROOT.joinpath("index.html")),
+            media_type="text/html",
+        )
+
+    @application.get("/config", response_model=RuntimeConfigResponse, tags=["system"])
+    def runtime_config() -> RuntimeConfigResponse:
+        """Expose only the capabilities needed by the bundled web client."""
+
+        return RuntimeConfigResponse(
+            app_version=__version__,
+            ai_enabled=character_provider is not None,
+            max_upload_bytes=MAX_UPLOAD_BYTES,
+            accepted_formats=[".txt"],
+        )
 
     @application.get("/health", response_model=HealthResponse, tags=["system"])
     def health() -> HealthResponse:

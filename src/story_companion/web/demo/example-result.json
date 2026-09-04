@@ -1,0 +1,168 @@
+{
+  "schema_version": "1.0",
+  "book_id": "demo-story",
+  "through_chapter": 2,
+  "characters": [
+    {
+      "id": "mara-vale",
+      "display_name": "Mara Vale",
+      "aliases": [],
+      "claims": [
+        {
+          "attribute": "arrival",
+          "value": "Arrived in Brambleford before sunrise with a compass and hand-drawn atlas.",
+          "category": "book_fact",
+          "evidence": [
+            {
+              "book_id": "demo-story",
+              "chapter_number": 1,
+              "start_offset": 51,
+              "end_offset": 171,
+              "excerpt": "Mara Vale arrived in Brambleford before sunrise, carrying a brass compass\nand a hand-drawn atlas tied with green thread."
+            }
+          ]
+        },
+        {
+          "attribute": "route notes",
+          "value": "Recorded the tower-to-ferry distance as one and a quarter miles.",
+          "category": "book_fact",
+          "evidence": [
+            {
+              "book_id": "demo-story",
+              "chapter_number": 1,
+              "start_offset": 618,
+              "end_offset": 722,
+              "excerpt": "Mara wrote the distance from the tower to the ferry in the margin of her\natlas: one and a quarter miles."
+            }
+          ]
+        },
+        {
+          "attribute": "travel",
+          "value": "Crossed the River Lume with Tomas in his boat.",
+          "category": "book_fact",
+          "evidence": [
+            {
+              "book_id": "demo-story",
+              "chapter_number": 2,
+              "start_offset": 753,
+              "end_offset": 837,
+              "excerpt": "At dawn the next day, Mara and Tomas crossed the River Lume in his narrow\nblue boat."
+            }
+          ]
+        },
+        {
+          "attribute": "temperament",
+          "value": "Appears methodical about distance, daylight, and route planning.",
+          "category": "model_inference",
+          "evidence": [
+            {
+              "book_id": "demo-story",
+              "chapter_number": 2,
+              "start_offset": 1199,
+              "end_offset": 1301,
+              "excerpt": "Mara checked\nthe light, measured the remaining distance on her atlas, and chose to wait\nuntil morning."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tomas-reed",
+      "display_name": "Tomas Reed",
+      "aliases": ["the village ferryman"],
+      "claims": [
+        {
+          "attribute": "occupation",
+          "value": "Village ferryman of Brambleford.",
+          "category": "book_fact",
+          "evidence": [
+            {
+              "book_id": "demo-story",
+              "chapter_number": 1,
+              "start_offset": 288,
+              "end_offset": 319,
+              "excerpt": "Tomas was the village ferryman."
+            }
+          ]
+        },
+        {
+          "attribute": "local knowledge",
+          "value": "Knows the bends and landing places of the River Lume.",
+          "category": "book_fact",
+          "evidence": [
+            {
+              "book_id": "demo-story",
+              "chapter_number": 1,
+              "start_offset": 320,
+              "end_offset": 425,
+              "excerpt": "He knew every bend of the River Lume and\nclaimed he could name a landing place by the sound of its water."
+            }
+          ]
+        },
+        {
+          "attribute": "navigation",
+          "value": "Guided the boat south before landing at the eastern reeds.",
+          "category": "book_fact",
+          "evidence": [
+            {
+              "book_id": "demo-story",
+              "chapter_number": 2,
+              "start_offset": 838,
+              "end_offset": 948,
+              "excerpt": "The current carried them south for nearly half a mile before\nTomas brought the boat against the eastern reeds."
+            }
+          ]
+        },
+        {
+          "attribute": "travel estimate",
+          "value": "Estimates that the north road takes four hours on foot.",
+          "category": "book_fact",
+          "evidence": [
+            {
+              "book_id": "demo-story",
+              "chapter_number": 2,
+              "start_offset": 1135,
+              "end_offset": 1198,
+              "excerpt": "Tomas warned that the north road would take four hours on foot."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "maras-aunt",
+      "display_name": "Mara's aunt",
+      "aliases": [],
+      "claims": [
+        {
+          "attribute": "instruction",
+          "value": "Told Mara to meet Tomas beneath the clock tower before the seventh bell.",
+          "category": "book_fact",
+          "evidence": [
+            {
+              "book_id": "demo-story",
+              "chapter_number": 1,
+              "start_offset": 172,
+              "end_offset": 286,
+              "excerpt": "Her aunt's letter contained\nonly one instruction: meet Tomas Reed beneath the clock tower before the\nseventh bell."
+            }
+          ]
+        },
+        {
+          "attribute": "lantern marks",
+          "value": "Mara believes her aunt made both the sketch and the stone marker.",
+          "category": "model_inference",
+          "evidence": [
+            {
+              "book_id": "demo-story",
+              "chapter_number": 2,
+              "start_offset": 1007,
+              "end_offset": 1133,
+              "excerpt": "Mara compared its\nthree-pointed flame with a sketch in her aunt's letter and decided the marks\nhad been made by the same hand."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

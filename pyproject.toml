@@ -4,11 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "story-companion"
-version = "0.1.0"
+version = "0.2.0"
 description = "A spoiler-safe, evidence-grounded AI reading companion."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = { file = "LICENSE" }
+keywords = ["books", "reading", "spoiler-safe", "provenance", "fastapi"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: FastAPI",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Processing",
+]
 dependencies = [
     "fastapi>=0.115,<1.0",
     "openai>=2.45,<3.0",
@@ -17,6 +25,11 @@ dependencies = [
     "python-multipart>=0.0.20,<1.0",
     "uvicorn[standard]>=0.34,<1.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/dmitriygorlov/story-companion"
+Repository = "https://github.com/dmitriygorlov/story-companion"
+Issues = "https://github.com/dmitriygorlov/story-companion/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -29,10 +42,18 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-story_companion = ["prompts/*.txt"]
+story_companion = [
+    "prompts/*.txt",
+    "web/*.html",
+    "web/assets/*.css",
+    "web/assets/*.js",
+    "web/assets/*.svg",
+    "web/demo/*.json",
+    "web/demo/*.txt",
+]
 
 [tool.pytest.ini_options]
-addopts = "-q"
+addopts = "-q --basetemp=.pytest-tmp"
 testpaths = ["tests"]
 
 [tool.ruff]

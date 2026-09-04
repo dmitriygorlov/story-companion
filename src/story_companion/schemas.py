@@ -1,5 +1,7 @@
 """API request and response schemas."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -50,3 +52,12 @@ class SpoilerSafeContextResponse(BaseModel):
     book_id: str
     through_chapter: int
     text: str
+
+
+class RuntimeConfigResponse(BaseModel):
+    """Public, secret-free capabilities used by the bundled web client."""
+
+    app_version: str
+    ai_enabled: bool
+    max_upload_bytes: int
+    accepted_formats: list[Literal[".txt"]]
